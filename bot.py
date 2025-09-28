@@ -1,4 +1,4 @@
-```python
+
 import os
 import discord
 from discord.ext import commands
@@ -92,5 +92,5 @@ async def on_ready():
         print(e)
 
 bot.run(os.getenv("DISCORD_BOT_TOKEN"))
-```
+
 
