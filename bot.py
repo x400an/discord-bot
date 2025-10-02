@@ -62,10 +62,14 @@ class VoteButton(discord.ui.Button):
             vote_data[message_id] = {}
         vote_data[message_id][user_id] = self.status
 
-        await update_embed(interaction.message, self.date)
+        # 安全にEmbed更新
+        try:
+            await update_embed(interaction.message, self.date, interaction)
+        except Exception as e:
+            print(f"投票更新でエラー: {e}")
 
 
-async def update_embed(message, date):
+async def update_embed(message, date, interaction=None):
     votes = vote_data.get(message.id, {})
     counts = {"yes":0, "maybe":0, "no":0}
     users = {"yes":[], "maybe":[], "no":[]}
@@ -74,15 +78,26 @@ async def update_embed(message, date):
         counts[s] += 1
         users[s].append(f"<@{uid}>")
 
-    # Embed作成
-    embed = discord.Embed(title=f"【予定候補】 {date}", color=0x2ecc71)
     line = (
         f"🟢 {counts['yes']}: {', '.join(users['yes']) if users['yes'] else 'なし'}\n"
         f"🟡 {counts['maybe']}: {', '.join(users['maybe']) if users['maybe'] else 'なし'}\n"
         f"🔴 {counts['no']}: {', '.join(users['no']) if users['no'] else 'なし'}"
     )
+
+    embed = discord.Embed(title=f"【予定候補】 {date}", color=0x2ecc71)
     embed.add_field(name="投票状況", value=line, inline=False)
-    await message.edit(embed=embed, view=message.components[0])
+
+    try:
+        if interaction:
+            # interaction.response は1回だけ
+            if not interaction.response.is_done():
+                await interaction.response.edit_message(embed=embed, view=interaction.message.view)
+            else:
+                await interaction.followup.edit_message(message_id=message.id, embed=embed, view=interaction.message.view)
+        else:
+            await message.edit(embed=embed, view=message.view)
+    except Exception as e:
+        print(f"Embed更新でエラー: {e}")
 
 
 async def schedule_close(message, date, close_time):
@@ -91,17 +106,20 @@ async def schedule_close(message, date, close_time):
     if wait_seconds > 0:
         await asyncio.sleep(wait_seconds)
 
-    # ボタン無効化
-    for child in message.components[0].children:
-        child.disabled = True
+    try:
+        # ボタン無効化
+        for child in message.view.children:
+            child.disabled = True
 
-    # 投票状況更新
-    await update_embed(message, date)
+        # 投票状況更新
+        await update_embed(message, date)
 
-    # Embedタイトルを締め切りに変更
-    embed = message.embeds[0]
-    embed.title += " (締め切り)"
-    await message.edit(embed=embed, view=message.components[0])
+        # タイトルに締め切りマーク追加
+        embed = message.embeds[0]
+        embed.title += " (締め切り)"
+        await message.edit(embed=embed, view=message.view)
+    except Exception as e:
+        print(f"締め切り処理でエラー: {e}")
 
 
 @bot.event
@@ -115,3 +133,4 @@ async def on_ready():
 
 
 bot.run(os.getenv("DISCORD_BOT_TOKEN"))
+
