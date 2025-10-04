@@ -2,16 +2,24 @@ import discord
 from discord.ext import commands
 from discord import app_commands
 import datetime
-import os  # ← 追加
+import os
 
+# -------------------
+# Bot設定
+# -------------------
 intents = discord.Intents.default()
 intents.message_content = True
-
 bot = commands.Bot(command_prefix="!", intents=intents)
 
-# 投票データ {message_id: {date: {status: [usernames]}}}
+# -------------------
+# 投票データ管理
+# {message_id: {date_or_event: {status: [usernames]}}}
+# -------------------
 vote_data = {}
 
+# -------------------
+# 投票用ビュー
+# -------------------
 class VoteView(discord.ui.View):
     def __init__(self, date_str):
         super().__init__(timeout=None)
@@ -51,7 +59,9 @@ class VoteView(discord.ui.View):
 
         await interaction.response.edit_message(embed=embed, view=self)
 
-
+# -------------------
+# /schedule: 定期的な日程調整
+# -------------------
 @bot.tree.command(name="schedule", description="日程調整を開始します")
 async def schedule(interaction: discord.Interaction):
     today = datetime.date.today()
@@ -67,7 +77,36 @@ async def schedule(interaction: discord.Interaction):
 
     await interaction.response.send_message("📅 日程候補を作成しました！", ephemeral=True)
 
+# -------------------
+# /event_now: 突発イベント作成
+# -------------------
+@bot.tree.command(name="event_now", description="突発イベントを作成して投票できます")
+@app_commands.describe(
+    title="イベント名",
+    description="詳細説明（任意）",
+    date="投票日程（複数可、カンマ区切り、任意）"
+)
+async def event_now(interaction: discord.Interaction, title: str, description: str = None, date: str = None):
+    if date:
+        date_list = [d.strip() for d in date.split(",")]
+    else:
+        today = datetime.date.today()
+        date_list = [today.strftime("%m/%d(%a)")]
 
+    for d in date_list:
+        embed_title = f"【突発イベント】{title} - {d}"
+        embed = discord.Embed(title=embed_title, description=description or "詳細なし")
+        embed.add_field(name="参加(🟢)", value="なし", inline=False)
+        embed.add_field(name="調整可(🟡)", value="なし", inline=False)
+        embed.add_field(name="不可(🔴)", value="なし", inline=False)
+
+        await interaction.channel.send(embed=embed, view=VoteView(d))
+
+    await interaction.response.send_message(f"⚡ 突発イベント『{title}』を作成しました！", ephemeral=True)
+
+# -------------------
+# Bot起動時
+# -------------------
 @bot.event
 async def on_ready():
     print(f"✅ Logged in as {bot.user}")
@@ -77,7 +116,9 @@ async def on_ready():
     except Exception as e:
         print(f"❌ Sync error: {e}")
 
-# 環境変数からトークンを取得する
+# -------------------
+# トークン取得 & 起動
+# -------------------
 TOKEN = os.getenv("DISCORD_BOT_TOKEN")
 if not TOKEN:
     raise ValueError("⚠️ DISCORD_BOT_TOKEN が設定されていません。Renderの環境変数を確認してください。")
