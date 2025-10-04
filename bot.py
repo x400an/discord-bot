@@ -2,6 +2,7 @@ import discord
 from discord.ext import commands
 from discord import app_commands
 import datetime
+import os  # ← 追加
 
 intents = discord.Intents.default()
 intents.message_content = True
@@ -13,7 +14,7 @@ vote_data = {}
 
 class VoteView(discord.ui.View):
     def __init__(self, date_str):
-        super().__init__(timeout=None)  # 永続化
+        super().__init__(timeout=None)
         self.date_str = date_str
 
     @discord.ui.button(label="参加(🟢)", style=discord.ButtonStyle.success)
@@ -29,7 +30,6 @@ class VoteView(discord.ui.View):
         await self.register_vote(interaction, "不可(🔴)")
 
     async def register_vote(self, interaction: discord.Interaction, status: str):
-        # 投票データを管理
         message_id = interaction.message.id
         user = interaction.user.display_name
 
@@ -77,4 +77,9 @@ async def on_ready():
     except Exception as e:
         print(f"❌ Sync error: {e}")
 
-bot.run("YOUR_BOT_TOKEN")
+# 環境変数からトークンを取得する
+TOKEN = os.getenv("DISCORD_BOT_TOKEN")
+if not TOKEN:
+    raise ValueError("⚠️ DISCORD_BOT_TOKEN が設定されていません。Renderの環境変数を確認してください。")
+
+bot.run(TOKEN)
