@@ -67,41 +67,33 @@ class VoteButton(discord.ui.Button):
             vote_data[message_id] = {}
         vote_data[message_id][user_id] = self.status
 
+        # 集計
+        votes = vote_data[message_id]
+        counts = {"yes": 0, "maybe": 0, "no": 0}
+        users = {"yes": [], "maybe": [], "no": []}
+
+        for uid, s in votes.items():
+            counts[s] += 1
+            users[s].append(f"<@{uid}>")
+
+        line = (
+            f"🟢 {counts['yes']}: {', '.join(users['yes']) if users['yes'] else 'なし'}\n"
+            f"🟡 {counts['maybe']}: {', '.join(users['maybe']) if users['maybe'] else 'なし'}\n"
+            f"🔴 {counts['no']}: {', '.join(users['no']) if users['no'] else 'なし'}"
+        )
+
+        embed = discord.Embed(title=f"【予定候補】 {self.date}", color=0x2ecc71)
+        embed.add_field(name="投票状況", value=line, inline=False)
+
+        # ✅ interaction.response は1回しか使えないので例外処理
         try:
-            await update_embed(interaction.message, self.date, interaction)
-        except Exception as e:
-            print(f"投票更新でエラー: {e}")
-
-
-async def update_embed(message, date, interaction=None):
-    votes = vote_data.get(message.id, {})
-    counts = {"yes": 0, "maybe": 0, "no": 0}
-    users = {"yes": [], "maybe": [], "no": []}
-
-    for uid, s in votes.items():
-        counts[s] += 1
-        users[s].append(f"<@{uid}>")
-
-    line = (
-        f"🟢 {counts['yes']}: {', '.join(users['yes']) if users['yes'] else 'なし'}\n"
-        f"🟡 {counts['maybe']}: {', '.join(users['maybe']) if users['maybe'] else 'なし'}\n"
-        f"🔴 {counts['no']}: {', '.join(users['no']) if users['no'] else 'なし'}"
-    )
-
-    embed = discord.Embed(title=f"【予定候補】 {date}", color=0x2ecc71)
-    embed.add_field(name="投票状況", value=line, inline=False)
-
-    try:
-        if interaction:
-            # interaction.response は1回のみ使用可能
-            if not interaction.response.is_done():
-                await interaction.response.edit_message(embed=embed, view=interaction.message.view)
-            else:
-                await interaction.followup.edit_message(message_id=message.id, embed=embed, view=interaction.message.view)
-        else:
-            await message.edit(embed=embed, view=message.view)
-    except Exception as e:
-        print(f"Embed更新でエラー: {e}")
+            await interaction.response.edit_message(embed=embed, view=interaction.message.view)
+        except discord.InteractionResponded:
+            await interaction.followup.edit_message(
+                message_id=message_id,
+                embed=embed,
+                view=interaction.message.view
+            )
 
 
 async def schedule_close(message, date, close_time):
@@ -117,10 +109,25 @@ async def schedule_close(message, date, close_time):
             child.disabled = True
 
         # Embedを更新して締め切りマークを追加
-        await update_embed(message, date)
-        embed = message.embeds[0]
-        embed.title += " (締め切り)"
+        votes = vote_data.get(message.id, {})
+        counts = {"yes": 0, "maybe": 0, "no": 0}
+        users = {"yes": [], "maybe": [], "no": []}
+
+        for uid, s in votes.items():
+            counts[s] += 1
+            users[s].append(f"<@{uid}>")
+
+        line = (
+            f"🟢 {counts['yes']}: {', '.join(users['yes']) if users['yes'] else 'なし'}\n"
+            f"🟡 {counts['maybe']}: {', '.join(users['maybe']) if users['maybe'] else 'なし'}\n"
+            f"🔴 {counts['no']}: {', '.join(users['no']) if users['no'] else 'なし'}"
+        )
+
+        embed = discord.Embed(title=f"【予定候補】 {date} (締め切り)", color=0x95a5a6)
+        embed.add_field(name="投票結果", value=line, inline=False)
+
         await message.edit(embed=embed, view=message.view)
+
     except Exception as e:
         print(f"締め切り処理でエラー: {e}")
 
@@ -136,3 +143,4 @@ async def on_ready():
 
 
 bot.run(os.getenv("DISCORD_BOT_TOKEN"))
+s
