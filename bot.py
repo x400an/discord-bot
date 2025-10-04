@@ -17,26 +17,31 @@ STATUS = {
     "no": "🔴"
 }
 
-# /schedule コマンド
+
 @bot.tree.command(name="schedule", description="次週の日曜始まりの予定候補を作成します")
 async def schedule(interaction: discord.Interaction):
+    # ✅ Discordに「応答準備中」と伝える（3秒ルール回避）
+    await interaction.response.defer(thinking=True, ephemeral=True)
+
     today = datetime.utcnow()
-    # 次週日曜
-    next_sunday = today + timedelta(days=(6-today.weekday())+7)
-    # 次週日曜〜土曜の7日間
+    next_sunday = today + timedelta(days=(6 - today.weekday()) + 7)
     dates = [next_sunday + timedelta(days=i) for i in range(7)]
     date_strings = [d.strftime("%m/%d(%a)") for d in dates]
 
+    # 各日程ごとにメッセージ生成
     for date_str in date_strings:
         embed = discord.Embed(title=f"【予定候補】 {date_str}", color=0x2ecc71)
         embed.add_field(name="投票状況", value="🟢0 🟡0 🔴0", inline=False)
         view = VoteView(date_str)
         message = await interaction.channel.send(embed=embed, view=view)
-        vote_data[message.id] = {}  # 初期化
+        vote_data[message.id] = {}
 
-        # 締め切りは作成から1週間後（UTC）
+        # 締め切り日時（作成から7日後）
         close_time = datetime.utcnow() + timedelta(days=7)
         asyncio.create_task(schedule_close(message, date_str, close_time))
+
+    # ✅ コマンド発行者への完了通知（本人にしか見えない）
+    await interaction.followup.send("✅ 予定候補を作成しました！", ephemeral=True)
 
 
 class VoteView(discord.ui.View):
@@ -62,7 +67,6 @@ class VoteButton(discord.ui.Button):
             vote_data[message_id] = {}
         vote_data[message_id][user_id] = self.status
 
-        # 安全にEmbed更新
         try:
             await update_embed(interaction.message, self.date, interaction)
         except Exception as e:
@@ -71,8 +75,8 @@ class VoteButton(discord.ui.Button):
 
 async def update_embed(message, date, interaction=None):
     votes = vote_data.get(message.id, {})
-    counts = {"yes":0, "maybe":0, "no":0}
-    users = {"yes":[], "maybe":[], "no":[]}
+    counts = {"yes": 0, "maybe": 0, "no": 0}
+    users = {"yes": [], "maybe": [], "no": []}
 
     for uid, s in votes.items():
         counts[s] += 1
@@ -89,7 +93,7 @@ async def update_embed(message, date, interaction=None):
 
     try:
         if interaction:
-            # interaction.response は1回だけ
+            # interaction.response は1回のみ使用可能
             if not interaction.response.is_done():
                 await interaction.response.edit_message(embed=embed, view=interaction.message.view)
             else:
@@ -101,20 +105,19 @@ async def update_embed(message, date, interaction=None):
 
 
 async def schedule_close(message, date, close_time):
+    """指定日時に自動締め切り処理"""
     now = datetime.utcnow()
     wait_seconds = (close_time - now).total_seconds()
     if wait_seconds > 0:
         await asyncio.sleep(wait_seconds)
 
     try:
-        # ボタン無効化
+        # ボタンを無効化
         for child in message.view.children:
             child.disabled = True
 
-        # 投票状況更新
+        # Embedを更新して締め切りマークを追加
         await update_embed(message, date)
-
-        # タイトルに締め切りマーク追加
         embed = message.embeds[0]
         embed.title += " (締め切り)"
         await message.edit(embed=embed, view=message.view)
@@ -124,7 +127,7 @@ async def schedule_close(message, date, close_time):
 
 @bot.event
 async def on_ready():
-    print(f"Logged in as {bot.user}")
+    print(f"✅ Logged in as {bot.user}")
     try:
         synced = await bot.tree.sync()
         print(f"Slash commands synced: {len(synced)}")
@@ -133,4 +136,3 @@ async def on_ready():
 
 
 bot.run(os.getenv("DISCORD_BOT_TOKEN"))
-
