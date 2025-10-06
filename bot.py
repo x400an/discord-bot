@@ -98,19 +98,19 @@ async def event_now(
     dates = []
     for d in date.split(","):
         d_clean = d.strip()
-        try:
-            # -形式（例: 2025-10-06）
-            parsed = datetime.datetime.strptime(d_clean, "%Y-%m-%d").strftime("%m/%d(%a)")
-        except ValueError:
+        parsed = None
+        for fmt in ("%Y-%m-%d", "%Y/%m/%d"):
             try:
-                # /形式（例: 2025/10/06）
-                parsed = datetime.datetime.strptime(d_clean, "%Y/%m/%d").strftime("%m/%d(%a)")
+                parsed = datetime.datetime.strptime(d_clean, fmt).strftime("%m/%d(%a)")
+                break
             except ValueError:
-                await interaction.followup.send(
-                    f"⚠️ 日付フォーマットが不正です: {d_clean}（正しい形式: YYYY-MM-DD または YYYY/MM/DD）",
-                    ephemeral=True
-                )
-                return
+                continue
+        if not parsed:
+            await interaction.followup.send(
+                f"⚠️ 日付フォーマットが不正です: {d_clean}（正しい形式: YYYY-MM-DD または YYYY/MM/DD）",
+                ephemeral=True
+            )
+            return
         dates.append(parsed)
 
     for d in dates:
