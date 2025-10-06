@@ -1,6 +1,7 @@
 import discord
 from discord import app_commands
 import datetime
+import os
 
 # IntentsとBotの初期化
 intents = discord.Intents.default()
@@ -62,7 +63,7 @@ class VoteView(discord.ui.View):
 
         await interaction.response.edit_message(embed=embed, view=self)
 
-# /schedule コマンド
+# /schedule コマンド（7日間候補）
 @tree.command(name="schedule", description="日程調整を開始します")
 async def schedule(interaction: discord.Interaction):
     await interaction.response.defer(ephemeral=True)
@@ -79,6 +80,46 @@ async def schedule(interaction: discord.Interaction):
 
     await interaction.followup.send("📅 日程候補を作成しました！", ephemeral=True)
 
+# /event_now コマンド（突発イベント）
+@tree.command(name="event_now", description="突発イベントを作成")
+@app_commands.describe(
+    title="イベント名",
+    description="詳細（任意）",
+    date="投票日程（任意、複数可、カンマ区切り、例: 2025-10-06,2025-10-07）"
+)
+async def event_now(
+    interaction: discord.Interaction,
+    title: str,
+    description: str = "",
+    date: str = ""
+):
+    await interaction.response.defer(ephemeral=True)
+
+    dates = []
+    if date:
+        for d in date.split(","):
+            try:
+                parsed = datetime.datetime.strptime(d.strip(), "%Y-%m-%d").strftime("%m/%d(%a)")
+                dates.append(parsed)
+            except ValueError:
+                await interaction.followup.send(
+                    f"⚠️ 日付フォーマットが不正です: {d}（正しい形式: YYYY-MM-DD）",
+                    ephemeral=True
+                )
+                return
+    else:
+        today = datetime.date.today()
+        dates.append(today.strftime("%m/%d(%a)"))
+
+    for d in dates:
+        embed = discord.Embed(title=f"【突発イベント】{title} - {d}", description=description or "詳細なし")
+        embed.add_field(name="参加(🟢)", value="なし", inline=False)
+        embed.add_field(name="調整可(🟡)", value="なし", inline=False)
+        embed.add_field(name="不可(🔴)", value="なし", inline=False)
+        await interaction.channel.send(embed=embed, view=VoteView(d))
+
+    await interaction.followup.send(f"🚨 イベント「{title}」を作成しました！", ephemeral=True)
+
 # Bot起動時にコマンド同期
 @bot.event
 async def on_ready():
@@ -90,7 +131,6 @@ async def on_ready():
         print(f"❌ Sync error: {e}")
 
 # トークンで起動
-import os
 TOKEN = os.getenv("DISCORD_BOT_TOKEN")
 if not TOKEN:
     raise ValueError("⚠️ DISCORD_BOT_TOKEN が設定されていません。Renderの環境変数を確認してください。")
