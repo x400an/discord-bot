@@ -85,27 +85,33 @@ async def schedule(interaction: discord.Interaction):
 @app_commands.describe(
     title="イベント名",
     description="詳細（任意）",
-    date="投票日程（必須、複数可、カンマ区切り、形式: YYYY-MM-DD、例: 2025-10-06,2025-10-07）"
+    date="投票日程（複数可、カンマ区切り、形式: YYYY-MM-DD、例: 2025-10-06）"
 )
 async def event_now(
     interaction: discord.Interaction,
     title: str,
-    date: str,  # ← 必須
-    description: str = ""  # ← ラベルは「詳細」
+    date: str,
+    description: str = ""
 ):
     await interaction.response.defer(ephemeral=True)
 
     dates = []
     for d in date.split(","):
+        d_clean = d.strip()
         try:
-            parsed = datetime.datetime.strptime(d.strip(), "%Y-%m-%d").strftime("%m/%d(%a)")
-            dates.append(parsed)
+            # -形式（例: 2025-10-06）
+            parsed = datetime.datetime.strptime(d_clean, "%Y-%m-%d").strftime("%m/%d(%a)")
         except ValueError:
-            await interaction.followup.send(
-                f"⚠️ 日付フォーマットが不正です: {d}（正しい形式: YYYY-MM-DD）",
-                ephemeral=True
-            )
-            return
+            try:
+                # /形式（例: 2025/10/06）
+                parsed = datetime.datetime.strptime(d_clean, "%Y/%m/%d").strftime("%m/%d(%a)")
+            except ValueError:
+                await interaction.followup.send(
+                    f"⚠️ 日付フォーマットが不正です: {d_clean}（正しい形式: YYYY-MM-DD または YYYY/MM/DD）",
+                    ephemeral=True
+                )
+                return
+        dates.append(parsed)
 
     for d in dates:
         embed = discord.Embed(title=f"【突発イベント】{title} - {d}", description=description or "詳細なし")
