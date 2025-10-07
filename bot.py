@@ -63,13 +63,22 @@ class VoteView(discord.ui.View):
 
         await interaction.response.edit_message(embed=embed, view=self)
 
-# /schedule コマンド（7日間候補）
+# ✅ 修正版 /schedule コマンド（3週間後の日曜から7日間）
 @tree.command(name="schedule", description="日程調整を開始します")
 async def schedule(interaction: discord.Interaction):
     await interaction.response.defer(ephemeral=True)
 
     today = datetime.date.today()
-    dates = [(today + datetime.timedelta(days=i)).strftime("%m/%d(%a)") for i in range(7)]
+
+    # 今日から3週間後
+    target = today + datetime.timedelta(weeks=3)
+
+    # その週の日曜日を取得（weekday()で0=月曜,6=日曜）
+    days_to_sunday = (6 - target.weekday()) % 7
+    start_date = target + datetime.timedelta(days=days_to_sunday)
+
+    # 日曜から7日分を生成
+    dates = [(start_date + datetime.timedelta(days=i)).strftime("%m/%d(%a)") for i in range(7)]
 
     for d in dates:
         embed = discord.Embed(title=f"【日程候補】{d}", description="以下のボタンで投票してください")
@@ -78,7 +87,10 @@ async def schedule(interaction: discord.Interaction):
         embed.add_field(name="不可(🔴)", value="なし", inline=False)
         await interaction.channel.send(embed=embed, view=VoteView(d))
 
-    await interaction.followup.send("📅 日程候補を作成しました！", ephemeral=True)
+    await interaction.followup.send(
+        f"📅 {start_date.strftime('%m/%d(%a)')} からの1週間の日程候補を作成しました！",
+        ephemeral=True
+    )
 
 # /event_now コマンド（突発イベント）
 @tree.command(name="event_now", description="突発イベントを作成")
